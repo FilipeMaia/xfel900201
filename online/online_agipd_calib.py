@@ -127,7 +127,8 @@ def common_mode_correction(inarray, mask, d=64):
 
     returns per-asic common-mode corrected version of a
     """
-    a = inarray.copy()
+    # Convert to float32 so we can assign NaN
+    a = inarray.copy().astype(np.float32)
     nmask = ~mask
     a[nmask] = np.nan
     m, n, l = a.shape

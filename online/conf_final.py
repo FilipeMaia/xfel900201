@@ -29,17 +29,25 @@ import xfel_online as xo
 
 state = {}
 state['Facility'] = 'EuXFELtrains'
-state['EuXFEL/DataSource'] = 'tcp://10.253.0.51:45000' # Raw
-# state['EuXFEL/DataSource'] = 'tcp://10.253.0.51:45011' # Calibrated
-state['EuXFEL/DataSource_GMD'] = 'tcp://10.253.0.142:6666' # Hack for the GMD
+# state['EuXFEL/DataSource'] = 'tcp://10.253.0.51:45000' # Raw
+state['EuXFEL/DataSource'] = 'tcp://max-display001.desy.de:1234' # Raw
+
+# We're gonna comment the GMD as it's not available in karabo-bridge
+# state['EuXFEL/DataSource_GMD'] = 'tcp://10.253.0.142:6666' # Hack for the GMD
 state['EuXFEL/DataFormat'] = 'Raw'
 state['EuXFEL/MaxTrainAge'] = 4
-# state['EuXFEL/MaxPulses'] = 120
+
+##
+## *** CHANGE THIS TO THE NUMBER OF TRAINS WHEN RUNNING FOR REAL!! *** ##
+##
 state['EuXFEL/MaxPulses'] = 137
 
+##
+## *** CHANGE THIS TO THE MODULE YOU WANT WHEN RUNNING FOR REAL!! *** ##
+##
+# We're just using 0 because that's all the karabo-bridge simulator can produce
 # Use SelModule = None or remove key to indicate a full detector
-# [For simulator, comment if running with full detector, otherwise uncomment]
-state['EuXFEL/SelModule'] = 4
+state['EuXFEL/SelModule'] = 0
 
 
 # Roundness
@@ -69,10 +77,8 @@ ratio_threshold = 2
 sumhit_threshold = 3000
 dark_threshold = 50
 
-# Pulse filter
-# base_pulse_filter = np.zeros(176, dtype="bool")
-# base_pulse_filter[1::1] = True
-base_pulse_filter = np.ones(176, dtype="bool")
+# Pulse filter. 600 is large enough for the number of cell in the AGIPD with some room to spare
+base_pulse_filter = np.ones(600, dtype="bool")
 base_pulse_filter[state['EuXFEL/MaxPulses']:] = False
 base_pulse_filter[0] = False
 base_pulse_filter[18::32] = False
@@ -122,10 +128,12 @@ def onEvent(evt):
     # npulses = len(T.timestamp) #Now get that from the length of the data
     analysis.event.printProcessingRate(pulses_per_event=176, label="Processing rate (pulses):" )
     analysis.event.printProcessingRate(pulses_per_event=1, label="Processing rate (trains):" )
-
+    
+    # Just for debugging
+    analysis.event.printNativeKeys(evt)
 
     # Apply the pulse mask derived from the GMD
-    pulse_filter = base_pulse_filter * xo.pulses_mask(evt)
+    pulse_filter = base_pulse_filter * xo.pulses_mask(evt,len(base_pulse_filter))
     # pulse_filter = base_pulse_filter
 
     # Shape of data: (module, ss, fs, cell)
@@ -171,7 +179,8 @@ def onEvent(evt):
         agipd_module.data[np.isnan(agipd_module.data)] = 0.
         badpixmask = np.ones((128,512,npulses)).astype(np.bool)
 
-    initmask = base_initmask[:,:,pulse_filter[:data_len]]
+    initmask = base_initmask[:,:,:data_len]
+    initmask = initmask[:,:,pulse_filter[:data_len]]
     mask = (badpixmask & initmask)
 
     # Common-mode  correction
@@ -361,7 +370,9 @@ def onEvent(evt):
 
             # Sizing
             sizing_size, sizing_score, sizing_template_radii = xo.sizingAGIPD(agipd_hits_strong.data, mask, center=(-16.4, 8.5), r0=0.01, r1=0.7, num_div=1000)
-            sizing_index = sizing_score.argmax(axis=1)
+            
+            # Seems unused
+            # sizing_index = sizing_score.argmax(axis=1)
             for i in range(Nhits_strong):
                 size_record = add_record(evt['analysis'], 'analysis', 'sizing: size', sizing_size[i]*xo.REAL_UNIT)
                 plotting.line.plotHistory(size_record, history=10000, group='Sizing')
